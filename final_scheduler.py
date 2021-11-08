@@ -252,8 +252,14 @@ while(1):
         slotnum = clist[1]
         for i in clist[2:]:
             if i.endswith(".csv"):
-                createTable(i, conn)
-                names.append(getTableName(i))
+                try: 
+                    createTable(i, conn)
+                    names.append(getTableName(i))
+                except:
+                    print("A table was not found,")
+                    print(i)
+                    print("Exiting this command")
+                    continue 
         checkForConlicts(slotnum, names, conn)
     elif clist[0] == "save":
         conn.commit()
