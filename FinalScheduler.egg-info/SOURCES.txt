@@ -1,0 +1,7 @@
+README.md
+final_scheduler.py
+setup.py
+FinalScheduler.egg-info/PKG-INFO
+FinalScheduler.egg-info/SOURCES.txt
+FinalScheduler.egg-info/dependency_links.txt
+FinalScheduler.egg-info/top_level.txt

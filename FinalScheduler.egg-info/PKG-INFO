@@ -1,0 +1,13 @@
+Metadata-Version: 1.2
+Name: FinalScheduler
+Version: 0.0.1
+Summary: Schedules courses for final exam slots
+Home-page: https://github.com/dillon4287/CodeProjects/Python/FinalScheduler
+Author: Dillon Flannery
+Author-email: dflannery@weimar.edu
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
