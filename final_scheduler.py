@@ -2,13 +2,9 @@
 
 import sqlite3 as sq
 import pandas as pd
-# import os
-# import argparse
+import os
 from pyfiglet import Figlet
-# import sys
-# import curses
 pd.options.mode.chained_assignment = None  # default='warn'
-
 
 
 def createSlots(numSlots, connection):
@@ -63,7 +59,7 @@ def printExe(execution):
 
 
 def printAll(tablename, connection):
-    r = connection.execute("SELECT * FROM {}".format(tablename))
+    r = connection.execute("SELECT * FROM {} ORDER BY Course".format(tablename))
     stuff = []
     for i in r:
         stuff.append(i)
@@ -107,16 +103,16 @@ def createTempTable(name, connection):
     cur.execute(sql)
 
 
-def deleteRowsByCourse(slot, coursename, conn):
+def deleteRowsByCourse(tablename, coursename, conn):
     cursor = conn.cursor()
     cursor.execute(
-        "DELETE FROM {} where Course = '{}' ".format(slot, coursename))
+        "DELETE FROM {} where Course = '{}' ".format(tablename, coursename))
 
 
-def deleteRowsById(slot, idnum, conn):
+def deleteRowsById(tablename, idnum, conn):
     cursor = conn.cursor()
     cursor.execute(
-        "DELETE FROM {} where StudentID = '{}' ".format(slot, idnum))
+        "DELETE FROM {} where StudentID = '{}' ".format(tablename, idnum))
 
 
 def checkForConlicts(slotNum, candidateList, connection):
@@ -205,16 +201,33 @@ def prettyPrintSql(sql):
         print("{:<20}{:<20}{:<20}{:<15}".format(i[1], i[2], i[3], i[4]))
 
 
-
+os.system("clear")
 f = Figlet(font='slant')
 print(f.renderText("Final Scheduler"))
 print("Usage:")
-print("{:<35} {:<20}".format("Create a database for the finals:", "create FinalSchedule"))
+print("{:<35} {:<20}".format(
+    "Create a database for the finals:", "create FinalSchedule"))
 print("{:<35} {:<20}".format("Create Numbered Time Slots:", "makeslots 10"))
-print("{:<35} {:<20}".format("Assign csv files to the slots (e.g. assign to slot 1):", "assignslot 1 filename1.csv filename2.csv"))
-print("{:<35}".format("Check for conflicts and drop files\nif there are or move to the next\nslot."))
-print("{:<35} {:<20}".format("Drop any table in the database:", "deletetable NAME"))
+print("{:<35} {:<20}".format("Assign csv files to the slots", ""))
+print("{:<35} {:<20}".format("(e.g. assign to slot 1):",
+      "assignslot 1 filename1.csv filename2.csv"))
+print("{:<35}".format(
+    "Check for conflicts and drop files\nif there are or move to the next\nslot."))
+print("{:<35} {:<20}".format(
+    "Drop any table in the database:", "deletetable NAME"))
+print("{:<35} {:<20}".format(
+    "Delete a course from a table", "deletebycourse NAME"))
+print("{:<35} {:<20}".format(
+    "Delete a student from a table:", "deletebystudentid NAME"))
+print("{:<35} {:<20}".format(
+    "Print all tables in the database:", "printtablesinfo"))
+print("{:<35} {:<20}".format("Print all records in a table:", "print NAME"))
+print("{:<35} {:<20}".format(
+    "Execute any sql type statement:", "sql SQL_COMMANDS"))
+print("{:<35} {:<20}".format("List all files in dir:", "list"))
 print("{:<35} {:<20}".format("Save the progress:", "save"))
+print("{:<35} {:<20}".format("Clear the workspace:", "clear"))
+print("{:<35} {:<20}".format("Print these commands again:", "help"))
 print("{:<35} {:<20}".format("Quit:", "q or quit"))
 print()
 
@@ -228,13 +241,13 @@ while(1):
             print("Connected to db")
         except:
             print("FAILED to connect")
-    if clist[0] == "makeslots":
+    elif clist[0] == "makeslots":
         try:
-             nslots = int(clist[1])
-             createSlots(nslots, conn)
+            nslots = int(clist[1])
+            createSlots(nslots, conn)
         except:
             print("Error in input in makeslots")
-    if clist[0] == "assignslot":
+    elif clist[0] == "assignslot":
         names = []
         slotnum = clist[1]
         for i in clist[2:]:
@@ -242,25 +255,25 @@ while(1):
                 createTable(i, conn)
                 names.append(getTableName(i))
         checkForConlicts(slotnum, names, conn)
-    if clist[0] == "save":
+    elif clist[0] == "save":
         conn.commit()
-    if (clist[0] == "q" ) or (clist[0] == "quit" ):
+    elif (clist[0] == "q") or (clist[0] == "quit"):
         try:
             conn.commit()
             conn.close()
             exit(1)
         except:
             exit(1)
-    if clist[0] == "deletetable":
+    elif clist[0] == "deletetable":
 
         print("Deleting table {}".format(clist[1]))
-        try: 
+        try:
             deleteTable(clist[1], conn)
             print("Update table list:")
             printTableInfo(conn)
         except:
             print("No table by that name, none deleted!")
-    if clist[0] == "print":
+    elif clist[0] == "print":
         try:
             printAll(clist[1], conn)
         except:
@@ -271,5 +284,74 @@ while(1):
             except:
                 print("There is no connection!")
                 print("Make a database first.")
-    if clist[0] == "printtableinfo":
-        printTableInfo(conn)
+    elif clist[0] == "printtableinfo":
+        try:
+            printTableInfo(conn)
+        except:
+            print("Connection does not exist yet!")
+    elif clist[0] == "deletebycourse":
+        tablename = clist[1]
+        courseid = clist[2]
+        try:
+            deleteRowsByCourse(tablename, courseid, conn)
+        except:
+            print("Something is wrong, either table does not exist or no course id is in the table.")
+    elif clist[0] == "deletebystudentid":
+        tablename = clist[1]
+        id = clist[2]
+        try:
+            deleteRowsById(tablename, id, conn)
+        except:
+            print("Something is wrong, either table does not exist or no student id is in the table.")
+    elif clist[0] == "printtables":
+        try:
+            printTableInfo(conn)
+        except:
+            print("No connection!")
+    elif clist[0] == "sql":
+        stmt = ' '.join(clist[1:])
+        cur = conn.cursor()
+        try:
+            cur.execute(stmt)
+        except:
+            print("Input error")
+    elif clist[0] == "listall":
+        os.system("ls")
+    elif clist[0] == "list":
+        os.system("ls *.csv")
+    elif clist[0] == "clear":
+        os.system("clear")
+    elif clist[0] == "help":
+        f = Figlet(font='slant')
+        print(f.renderText("Final Scheduler"))
+        print("Usage:")
+        print("{:<35} {:<20}".format(
+            "Create a database for the finals:", "create FinalSchedule"))
+        print("{:<35} {:<20}".format(
+            "Create Numbered Time Slots:", "makeslots 10"))
+        print("{:<35} {:<20}".format("Assign csv files to the slots", ""))
+        print("{:<35} {:<20}".format("(e.g. assign to slot 1):",
+                                     "assignslot 1 filename1.csv filename2.csv"))
+        print("{:<35}".format(
+            "Check for conflicts and drop files\nif there are or move to the next\nslot."))
+        print("{:<35} {:<20}".format(
+            "Drop any table in the database:", "deletetable NAME"))
+        print("{:<35} {:<20}".format(
+            "Delete a course from a table", "deletebycourse NAME"))
+        print("{:<35} {:<20}".format(
+            "Delete a student from a table:", "deletebystudentid NAME"))
+        print("{:<35} {:<20}".format(
+            "Print all tables in the database:", "printtablesinfo"))
+        print("{:<35} {:<20}".format(
+            "Print all records in a table:", "print NAME"))
+        print("{:<35} {:<20}".format(
+            "Execute any sql type statement:", "sql SQL_COMMANDS"))
+        print("{:<35} {:<20}".format("List all files in dir:", "listall"))
+        print("{:<35} {:<20}".format("List csv files:", "list"))
+        print("{:<35} {:<20}".format("Save the progress:", "save"))
+        print("{:<35} {:<20}".format("Clear the workspace:", "clear"))
+        print("{:<35} {:<20}".format("Print these commands again:", "help"))
+        print("{:<35} {:<20}".format("Quit:", "q or quit"))
+        print()
+    else:
+        print("Error: command not found.")
