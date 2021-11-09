@@ -147,6 +147,7 @@ def checkForConlicts(slotNum, candidateList, connection):
         x = "SELECT * FROM {} WHERE StudentID = {}".format(slot, i[0])
         for j in cur2.execute(x):
             dupes.append(j)
+    deleteTable(tmp, connection)
     if (len(dupes) > 0):
         print("\n\tCould not create table because duplicates exist!\n\tRemove a file before proceeding.\n".format(slot))
         print("\tDuplicates")
@@ -156,7 +157,8 @@ def checkForConlicts(slotNum, candidateList, connection):
         # in existing slot table!
         slot = "slot{}".format(slotNum)
         check = cur.execute("""select {}.StudentID, {}.FirstName, {}.LastName, {}.Type, {}.Course 
-        from {} inner join candidate_{} on  {}.StudentID=candidate_{}.StudentID;""".format(slot, slot, slot, slot, slot, slot, slot, slot, slot))
+        from {} inner join candidate_{} on {}.StudentID=candidate_{}.StudentID AND {}.LastName=candidate_{}.LastName;""".format(slot, slot, slot, slot, slot, slot,
+            slot, slot, slot, slot, slot))
         dupes = []
         for i in check:
             if i[0] == '':
@@ -193,12 +195,12 @@ def checkForConlicts(slotNum, candidateList, connection):
 
 
 def prettyPrintSql(sql):
-    print("------------------------------------------------------------------")
-    print("{:<20}{:<20}{:<20}{:<15}".format(
-        "LastName", "FirstName", "Type", "Course"))
-    print("------------------------------------------------------------------")
+    print("-------------------------------------------------------------------------------------")
+    print("{:<20}{:<20}{:<20}{:<15}{:<15}".format(
+        "LastName", "FirstName", "Type", "Course", "StudentID"))
+    print("-------------------------------------------------------------------------------------")
     for i in sql:
-        print("{:<20}{:<20}{:<20}{:<15}".format(i[1], i[2], i[3], i[4]))
+        print("{:<20}{:<20}{:<20}{:<15}{:<15}".format(i[1], i[2], i[3], i[4], i[0]))
 
 
 os.system("clear")
@@ -220,7 +222,7 @@ print("{:<35} {:<20}".format(
 print("{:<35} {:<20}".format(
     "Delete a student from a table:", "deletebystudentid NAME"))
 print("{:<35} {:<20}".format(
-    "Print all tables in the database:", "printtablesinfo"))
+    "Print all tables in the database:", "printtables"))
 print("{:<35} {:<20}".format("Print all records in a table:", "print NAME"))
 print("{:<35} {:<20}".format(
     "Execute any sql type statement:", "sql SQL_COMMANDS"))
@@ -252,8 +254,14 @@ while(1):
         slotnum = clist[1]
         for i in clist[2:]:
             if i.endswith(".csv"):
-                createTable(i, conn)
-                names.append(getTableName(i))
+                try: 
+                    createTable(i, conn)
+                    names.append(getTableName(i))
+                except:
+                    print("A table was not found,")
+                    print(i)
+                    print("Exiting this command")
+                    continue 
         checkForConlicts(slotnum, names, conn)
     elif clist[0] == "save":
         conn.commit()
@@ -284,7 +292,7 @@ while(1):
             except:
                 print("There is no connection!")
                 print("Make a database first.")
-    elif clist[0] == "printtableinfo":
+    elif clist[0] == "printtables":
         try:
             printTableInfo(conn)
         except:
@@ -310,6 +318,7 @@ while(1):
             print("No connection!")
     elif clist[0] == "sql":
         stmt = ' '.join(clist[1:])
+        print(stmt)
         cur = conn.cursor()
         try:
             cur.execute(stmt)
