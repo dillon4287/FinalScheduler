@@ -3,7 +3,10 @@
 import sqlite3 as sq
 import pandas as pd
 import os
+# import argparse
 from pyfiglet import Figlet
+# import sys
+# import curses
 pd.options.mode.chained_assignment = None  # default='warn'
 
 
@@ -59,7 +62,7 @@ def printExe(execution):
 
 
 def printAll(tablename, connection):
-    r = connection.execute("SELECT * FROM {} ORDER BY Course".format(tablename))
+    r = connection.execute("SELECT * FROM {}".format(tablename))
     stuff = []
     for i in r:
         stuff.append(i)
@@ -115,6 +118,84 @@ def deleteRowsById(tablename, idnum, conn):
         "DELETE FROM {} where StudentID = '{}' ".format(tablename, idnum))
 
 
+def checkForConflicts2(slotNum, candidateList, connection):
+    cur = connection.cursor()
+    slot = "temp_table{}".format(slotNum)
+    deleteTable(slot, connection)
+    create = "CREATE TABLE {} (\n".format(slot)
+    col1 = "StudentID INTEGER, "
+    col2 = "FirstName String, "
+    col3 = "LastName String, "
+    col4 = "Type String, "
+    col5 = "Course String"
+    end = ");"
+    sql = create + col1 + col2 + col3 + col4 + col5 + end
+    cur.execute(sql)
+    createunion = "INSERT INTO {}\n".format(slot)
+    for i in range(len(candidateList)):
+        if i == len(candidateList)-1:
+            createunion += "SELECT * FROM {}".format(candidateList[i])
+        else:
+            createunion += "SELECT * FROM {} \nUNION ALL \n".format(
+                candidateList[i])
+    cur.execute(createunion)
+    tmp = "temp"
+    createTempTable(tmp, connection)
+    duplicates = "INSERT INTO {} \n SELECT * FROM {}\n".format(tmp, slot)
+    duplicates += "GROUP BY StudentID\n HAVING COUNT(*) > 1;"
+    cur.execute(duplicates)
+    cur2 = connection.cursor()
+    dupes = []
+    for i in cur.execute("SELECT * FROM temp"):
+        x = "SELECT * FROM {} WHERE StudentID = {}".format(slot, i[0])
+        for j in cur2.execute(x):
+            dupes.append(j)
+    if (len(dupes) > 0):
+        print("\n\tCould not create table because duplicates exist!\n\tRemove a file before proceeding.\n".format(slot))
+        print("\tDuplicates")
+        prettyPrintSql(dupes)
+    else:
+        # No conflicts in candidate slot, however, need to check if any exist
+        # in existing slot table!
+        slot = "slot{}".format(slotNum)
+        command = """select temp_table{}.StudentID, temp_table{}.FirstName, temp_Table{}.LastName, temp_table{}.Type, temp_table{}.Course 
+        from temp_table{} inner join {} on (({}.StudentID=temp_table{}.StudentID) AND ({}.LastName=temp_table{}.LastName));""".format(slotNum, 
+        slotNum, slotNum, slotNum, slotNum, slotNum, slot, slot, slotNum, slot, slotNum)
+        check = cur.execute(command)
+        dupes = []
+        for i in check:
+            print(i)
+            if i[0] == '':
+                    print(i[2])
+                    x = "SELECT * FROM {} WHERE LastName = '{}' ".format(slot, i[2])
+                    for j in cur2.execute(x):
+                        print("Record has incomplete incormation, however duplicate exists!")
+                        dupes.append(j)
+                        dupes.append(i)
+            else:
+                x = "SELECT * FROM {} WHERE StudentID = {}".format(slot, i[0])
+                for j in cur2.execute(x):
+                    dupes.append(j)
+                    dupes.append(i)
+        if len(dupes) > 0:
+            print(
+                "Some student records are found in both {} and the candidate pool.".format(slot))
+            print("These students cannot be assigned to this slot:")
+            prettyPrintSql(dupes)
+        else:
+            print("No conflicts found, putting students and faculty into this slot")
+            cur.execute(
+                "INSERT INTO {} SELECT * FROM temp_table{}".format(slot, slotNum))
+            x = cur.execute("SELECT * FROM {}".format(slot))
+            records = []
+            for i in x:
+                records.append(i)
+            print("Students and faculty in {}".format(slot))
+            prettyPrintSql(records)    
+            deleteTable("temp_table{}".format(slotNum), connection)    
+    
+
+
 def checkForConlicts(slotNum, candidateList, connection):
     cur = connection.cursor()
     slot = "candidate_slot{}".format(slotNum)
@@ -147,7 +228,6 @@ def checkForConlicts(slotNum, candidateList, connection):
         x = "SELECT * FROM {} WHERE StudentID = {}".format(slot, i[0])
         for j in cur2.execute(x):
             dupes.append(j)
-    deleteTable(tmp, connection)
     if (len(dupes) > 0):
         print("\n\tCould not create table because duplicates exist!\n\tRemove a file before proceeding.\n".format(slot))
         print("\tDuplicates")
@@ -157,8 +237,7 @@ def checkForConlicts(slotNum, candidateList, connection):
         # in existing slot table!
         slot = "slot{}".format(slotNum)
         check = cur.execute("""select {}.StudentID, {}.FirstName, {}.LastName, {}.Type, {}.Course 
-        from {} inner join candidate_{} on {}.StudentID=candidate_{}.StudentID AND {}.LastName=candidate_{}.LastName;""".format(slot, slot, slot, slot, slot, slot,
-            slot, slot, slot, slot, slot))
+        from {} inner join candidate_{} on  {}.StudentID=candidate_{}.StudentID;""".format(slot, slot, slot, slot, slot, slot, slot, slot, slot))
         dupes = []
         for i in check:
             if i[0] == '':
@@ -171,7 +250,6 @@ def checkForConlicts(slotNum, candidateList, connection):
                 except:
                     print(
                         "Record has incomplete incormation, however duplicate exists!")
-
             else:
                 x = "SELECT * FROM {} WHERE StudentID = {}".format(slot, i[0])
                 for j in cur2.execute(x):
@@ -180,7 +258,7 @@ def checkForConlicts(slotNum, candidateList, connection):
         if len(dupes) > 0:
             print(
                 "Some student records are found in both {} and the candidate pool.".format(slot))
-            print("Remove duplicates in candidate pool:")
+            print("These students cannot be assigned to this slot:")
             prettyPrintSql(dupes)
         else:
             print("No conflicts found, putting students and faculty into this slot")
@@ -195,41 +273,46 @@ def checkForConlicts(slotNum, candidateList, connection):
 
 
 def prettyPrintSql(sql):
-    print("-------------------------------------------------------------------------------------")
-    print("{:<20}{:<20}{:<20}{:<15}{:<15}".format(
-        "LastName", "FirstName", "Type", "Course", "StudentID"))
-    print("-------------------------------------------------------------------------------------")
+    print("------------------------------------------------------------------")
+    print("{:<20}{:<20}{:<20}{:<15}".format(
+        "LastName", "FirstName", "Type", "Course"))
+    print("------------------------------------------------------------------")
     for i in sql:
-        print("{:<20}{:<20}{:<20}{:<15}{:<15}".format(i[1], i[2], i[3], i[4], i[0]))
+        print("{:<20}{:<20}{:<20}{:<15}".format(i[1], i[2], i[3], i[4]))
 
 
-os.system("clear")
+def printCsv(fname):
+    f1 = pd.read_csv(fname, keep_default_na=False)
+    f1 = getFields(f1)
+    print(f1)
+
+
 f = Figlet(font='slant')
 print(f.renderText("Final Scheduler"))
 print("Usage:")
 print("{:<35} {:<20}".format(
     "Create a database for the finals:", "create FinalSchedule"))
 print("{:<35} {:<20}".format("Create Numbered Time Slots:", "makeslots 10"))
-print("{:<35} {:<20}".format("Assign csv files to the slots", ""))
-print("{:<35} {:<20}".format("(e.g. assign to slot 1):",
+print("{:<35} {:<20}".format("Assign csv files to the slots (e.g. assign to slot 1):",
       "assignslot 1 filename1.csv filename2.csv"))
 print("{:<35}".format(
     "Check for conflicts and drop files\nif there are or move to the next\nslot."))
 print("{:<35} {:<20}".format(
     "Drop any table in the database:", "deletetable NAME"))
 print("{:<35} {:<20}".format(
-    "Delete a course from a table", "deletebycourse NAME"))
+    "Delete a course from a table", "deletebycourse TABLENAME COURSENAME"))
 print("{:<35} {:<20}".format(
-    "Delete a student from a table:", "deletebystudentid NAME"))
-print("{:<35} {:<20}".format(
-    "Print all tables in the database:", "printtables"))
+    "Delete a student from a table:", "deletebystudentid TABLENAME STUDENTID"))
+print("{:<35} {:<20}".format("Print all tables in the database:", "printtables"))
 print("{:<35} {:<20}".format("Print all records in a table:", "print NAME"))
 print("{:<35} {:<20}".format(
     "Execute any sql type statement:", "sql SQL_COMMANDS"))
-print("{:<35} {:<20}".format("List all files in dir:", "list"))
+print("{:<35} {:<20}".format("Print a csv file:", "printcsv FILENAME"))
+print("{:<35} {:<20}".format("List all files in dir:", "ls"))
 print("{:<35} {:<20}".format("Save the progress:", "save"))
 print("{:<35} {:<20}".format("Clear the workspace:", "clear"))
 print("{:<35} {:<20}".format("Print these commands again:", "help"))
+print("{:<35} {:<20}".format("Save the progress:", "save"))
 print("{:<35} {:<20}".format("Quit:", "q or quit"))
 print()
 
@@ -254,15 +337,15 @@ while(1):
         slotnum = clist[1]
         for i in clist[2:]:
             if i.endswith(".csv"):
-                try: 
+                try:
                     createTable(i, conn)
-                    names.append(getTableName(i))
                 except:
-                    print("A table was not found,")
-                    print(i)
-                    print("Exiting this command")
-                    continue 
-        checkForConlicts(slotnum, names, conn)
+                    print("No connection or filename incorrect")
+                names.append(getTableName(i))
+        
+        checkForConflicts2(slotnum, names, conn)
+        # except:
+            # print("Possibly no table by that name, create more")
     elif clist[0] == "save":
         conn.commit()
     elif (clist[0] == "q") or (clist[0] == "quit"):
@@ -273,7 +356,6 @@ while(1):
         except:
             exit(1)
     elif clist[0] == "deletetable":
-
         print("Deleting table {}".format(clist[1]))
         try:
             deleteTable(clist[1], conn)
@@ -292,41 +374,30 @@ while(1):
             except:
                 print("There is no connection!")
                 print("Make a database first.")
-    elif clist[0] == "printtables":
-        try:
-            printTableInfo(conn)
-        except:
-            print("Connection does not exist yet!")
     elif clist[0] == "deletebycourse":
         tablename = clist[1]
         courseid = clist[2]
-        try:
-            deleteRowsByCourse(tablename, courseid, conn)
-        except:
-            print("Something is wrong, either table does not exist or no course id is in the table.")
+        deleteRowsByCourse(tablename, courseid, conn)
     elif clist[0] == "deletebystudentid":
         tablename = clist[1]
         id = clist[2]
-        try:
-            deleteRowsById(tablename, id, conn)
-        except:
-            print("Something is wrong, either table does not exist or no student id is in the table.")
+        deleteRowsById(tablename, id, conn)
     elif clist[0] == "printtables":
-        try:
-            printTableInfo(conn)
-        except:
-            print("No connection!")
+        printTableInfo(conn)
     elif clist[0] == "sql":
         stmt = ' '.join(clist[1:])
-        print(stmt)
         cur = conn.cursor()
         try:
             cur.execute(stmt)
         except:
             print("Input error")
-    elif clist[0] == "listall":
-        os.system("ls")
-    elif clist[0] == "list":
+    elif clist[0] == "printcsv":
+        try:
+            printCsv(clist[1])
+        except:
+            print("Input error")
+
+    elif clist[0] == "ls":
         os.system("ls *.csv")
     elif clist[0] == "clear":
         os.system("clear")
